@@ -1,0 +1,52 @@
+name: Build Android Release APK
+on:
+  workflow_dispatch:  # Manuel olarak tetiklenmesini sağlar
+    inputs:
+      version_name:
+        description: 'Versiyon Adı (örn: 1.0.0)'
+        required: true
+        default: '1.0.0'
+      version_code:
+        description: 'Versiyon Kodu (örn: 1)'
+        required: true
+        default: '1'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Kodu
+        uses: actions/checkout@v3
+      - name: JDK 17 Kurulumu
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - name: Gradle Önbelleği Yapılandırması
+        uses: gradle/gradle-build-action@v2
+      - name: Gradlew'yi Çalıştırılabilir Yap
+        run: chmod +x ./gradlew
+        working-directory: ./eBook
+      - name: Release APK Oluştur
+        run: ./gradlew assembleRelease
+        working-directory: ./eBook
+        env:
+          ORG_GRADLE_PROJECT_versionName: ${{ github.event.inputs.version_name }}
+          ORG_GRADLE_PROJECT_versionCode: ${{ github.event.inputs.version_code }}
+      - name: APK Dosyasını Bul
+        id: find_apk
+        run: |
+          apk_path=$(find ./eBook/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          echo "apk_path=$apk_path" >> $GITHUB_OUTPUT
+          echo "Bulunan APK: $apk_path"
+      - name: GitHub Release Oluştur ve APK Yükle
+        uses: softprops/action-gh-release@v1
+        if: ${{ steps.find_apk.outputs.apk_path != '' }}
+        with:
+          tag_name: v${{ github.event.inputs.version_name }}
+          name: eBook App v${{ github.event.inputs.version_name }}
+          files: ${{ steps.find_apk.outputs.apk_path }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
