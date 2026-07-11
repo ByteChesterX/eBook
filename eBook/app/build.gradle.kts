@@ -45,8 +45,8 @@ dependencies {
     implementation(libs.androidx.activity)
     implementation(libs.androidx.constraintlayout)
     
-    // PDF Viewer
-    implementation("com.github.barteksc:AndroidPdfViewer:3.2.0-beta.1")
+    // PDF Viewer (JitPack uyumlu çalışan fork ile güncellendi)
+    implementation("com.github.DmitryRyazantsev:AndroidPdfViewer:3.2.0-beta.1")
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
