@@ -40,18 +40,26 @@ jobs:
         working-directory: ./eBook
         run: chmod +x gradlew
 
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > ./eBook/app/release-keystore.jks
+
       - name: Release APK Oluştur
         working-directory: ./eBook
         run: ./gradlew assembleRelease
         env:
           ORG_GRADLE_PROJECT_versionName: ${{ github.event.inputs.version_name }}
           ORG_GRADLE_PROJECT_versionCode: ${{ github.event.inputs.version_code }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: APK Dosyasını Bul
         id: find_apk
         run: |
           apk_path=$(find ./eBook/app/build/outputs/apk/release -name "*.apk" | head -n 1)
           echo "apk_path=$apk_path" >> $GITHUB_OUTPUT
+          echo "Bulunan APK: $apk_path"
 
       - name: GitHub Release Oluştur ve APK Yükle
         if: ${{ steps.find_apk.outputs.apk_path != '' }}
