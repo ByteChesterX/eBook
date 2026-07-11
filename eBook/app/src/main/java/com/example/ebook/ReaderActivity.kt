@@ -1,14 +1,15 @@
 package com.example.ebook
 
-import android.content.Context
-import android.content.SharedPreferences
-import android.graphics.Color
+import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import android.view.View
+import android.widget.ImageView
 import android.widget.SeekBar
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
@@ -17,27 +18,27 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import java.io.File
 import java.io.FileOutputStream
-import java.io.IOException
 
 class ReaderActivity : AppCompatActivity() {
 
     private lateinit var recyclerView: RecyclerView
     private lateinit var zoomSeekBar: SeekBar
-    private var pdfRenderer: PdfRenderer? = null
-    private var parcelFileDescriptor: ParcelFileDescriptor? = null
-    private var pdfAdapter: PdfAdapter? = null
-    private var scaleFactor: Float = 1.0f
-    private var isDarkMode: Boolean = false
-    private lateinit var sharedPreferences: SharedPreferences
+    private lateinit var zoomValueText: TextView
+    private lateinit var adapter: PdfPageAdapter
+
+    private var pdfUri: Uri? = null
+    private var renderer: PdfRenderer? = null
+    private var fileDescriptor: ParcelFileDescriptor? = null
+    
+    // Varsayılan zoom %100
+    private var currentZoomLevel: Int = 100 
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Tema Ayarı (SharedPreferences'tan oku)
-        sharedPreferences = getSharedPreferences("AppSettings", Context.MODE_PRIVATE)
-        val savedTheme = sharedPreferences.getString("theme", "light")
-        isDarkMode = (savedTheme == "dark")
         
+        // Tema Ayarı (SharedPreferences'tan okunur)
+        val prefs = getSharedPreferences("app_settings", MODE_PRIVATE)
+        val isDarkMode = prefs.getBoolean("dark_mode", false)
         if (isDarkMode) {
             AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
         } else {
@@ -48,114 +49,162 @@ class ReaderActivity : AppCompatActivity() {
 
         recyclerView = findViewById(R.id.recyclerViewPages)
         zoomSeekBar = findViewById(R.id.zoomSeekBar)
+        zoomValueText = findViewById(R.id.zoomValueText)
 
-        // Zoom Ayarı
-        val savedZoom = sharedPreferences.getInt("zoomLevel", 100)
-        scaleFactor = savedZoom / 100.0f
-        zoomSeekBar.progress = savedZoom
+        pdfUri = intent.data
+
+        if (pdfUri == null) {
+            Toast.makeText(this, "PDF dosyası bulunamadı.", Toast.LENGTH_SHORT).show()
+            finish()
+            return
+        }
+
+        setupRecyclerView()
+        setupZoomListener()
+        loadPdf()
+    }
+
+    private fun setupRecyclerView() {
+        adapter = PdfPageAdapter(emptyList())
+        recyclerView.layoutManager = LinearLayoutManager(this)
+        recyclerView.adapter = adapter
+    }
+
+    private fun setupZoomListener() {
+        // SharedPreferences'tan son zoom seviyesini çek (Varsayılan 100)
+        val prefs = getSharedPreferences("app_settings", MODE_PRIVATE)
+        currentZoomLevel = prefs.getInt("zoom_level", 100)
+        
+        zoomSeekBar.progress = currentZoomLevel
+        updateZoomText(currentZoomLevel)
 
         zoomSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                scaleFactor = progress / 100.0f
-                sharedPreferences.edit().putInt("zoomLevel", progress).apply()
-                // Adapter'ı yenile (Basitlik için tüm listeyi yeniliyoruz, production'da optimize edilebilir)
-                pdfAdapter?.notifyDataSetChanged()
+                if (fromUser) {
+                    currentZoomLevel = progress
+                    updateZoomText(progress)
+                    // Adapter'ı güncelle
+                    adapter.updateScale(progress)
+                    // Tercihi kaydet
+                    prefs.edit().putInt("zoom_level", progress).apply()
+                }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
-
-        // PDF Uri'yi al ve işle
-        val pdfUri = intent.data
-        if (pdfUri != null) {
-            loadPdf(pdfUri)
-        } else {
-            Toast.makeText(this, "PDF dosyası bulunamadı.", Toast.LENGTH_SHORT).show()
-            finish()
-        }
     }
 
-    private fun loadPdf(uri: Uri) {
+    private fun updateZoomText(level: Int) {
+        zoomValueText.text = "%$level"
+    }
+
+    private fun loadPdf() {
         try {
-            // ContentResolver üzerinden ParcelFileDescriptor açma
-            parcelFileDescriptor = contentResolver.openFileDescriptor(uri, "r")
-            parcelFileDescriptor?.let {
-                pdfRenderer = PdfRenderer(it)
-                setupRecyclerView()
+            // URI'yı geçici bir dosyaya kopyala (PdfRenderer FileDescriptor ister)
+            val tempFile = File(cacheDir, "temp_pdf_${System.currentTimeMillis()}.pdf")
+            contentResolver.openInputStream(pdfUri!!)?.use { input ->
+                FileOutputStream(tempFile).use { output ->
+                    input.copyTo(output)
+                }
             }
-        } catch (e: IOException) {
-            e.printStackTrace()
-            Toast.makeText(this, "PDF yüklenirken hata oluştu: ${e.message}", Toast.LENGTH_LONG).show()
-            finish()
-        }
-    }
 
-    private fun setupRecyclerView() {
-        pdfRenderer?.let { renderer ->
-            pdfAdapter = PdfAdapter(renderer, scaleFactor, isDarkMode)
-            recyclerView.apply {
-                layoutManager = LinearLayoutManager(this@ReaderActivity)
-                adapter = pdfAdapter
-                // Akıcı kaydırma ayarları
-                layoutAnimation = null // Varsayılan animasyonları kapatabiliriz veya özelleştirebiliriz
+            fileDescriptor = ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY)
+            renderer = PdfRenderer(fileDescriptor!!)
+
+            val pageCount = renderer!!.pageCount
+            val pages = mutableListOf<PdfRenderer.Page>()
+            
+            // Sayfaları hazırla (Render etme, sadece referans tutma)
+            for (i in 0 until pageCount) {
+                pages.add(renderer!!.openPage(i))
             }
+
+            adapter = PdfPageAdapter(pages)
+            recyclerView.adapter = adapter
+            
+            // Zoom'u uygula
+            adapter.updateScale(currentZoomLevel)
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(this, "PDF yüklenirken hata: ${e.message}", Toast.LENGTH_LONG).show()
+            finish()
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        // Kaynakları serbest bırak
-        pdfRenderer?.close()
-        parcelFileDescriptor?.close()
+        // Bellek sızıntısını önlemek için kaynakları kapat
+        for (page in adapter.pages) {
+            page.close()
+        }
+        renderer?.close()
+        fileDescriptor?.close()
     }
 }
 
-// RecyclerView Adapter Sınıfı
-class PdfAdapter(
-    private val pdfRenderer: PdfRenderer,
-    private val scaleFactor: Float,
-    private val isDarkMode: Boolean
-) : RecyclerView.Adapter<PdfAdapter.PdfPageViewHolder>() {
+// Adapter Sınıfı
+class PdfPageAdapter(
+    val pages: List<PdfRenderer.Page>
+) : RecyclerView.Adapter<PdfPageAdapter.PageViewHolder>() {
 
-    override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): PdfPageViewHolder {
-        val context = parent.context
-        val imageView = android.widget.ImageView(context).apply {
-            adjustViewBounds = true
-            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
-            // Arka plan rengini temaya göre ayarla
-            setBackgroundColor(if (isDarkMode) Color.DKGRAY else Color.WHITE)
-            layoutParams = RecyclerView.LayoutParams(
-                RecyclerView.LayoutParams.MATCH_PARENT,
-                RecyclerView.LayoutParams.WRAP_CONTENT
-            )
-            setPadding(0, 4, 0, 4) // Sayfalar arasında hafif boşluk
+    private var scaleFactor: Float = 1.0f
+
+    class PageViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        val imageView: ImageView = itemView.findViewById(R.id.pageImage)
+        val progressBar: View = itemView.findViewById(R.id.loadingProgress)
+    }
+
+    override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): PageViewHolder {
+        val view = android.view.LayoutInflater.from(parent.context)
+            .inflate(R.layout.item_page, parent, false)
+        return PageViewHolder(view)
+    }
+
+    override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
+        val page = pages[position]
+        
+        // Render işlemi
+        renderPage(page, holder.imageView, scaleFactor)
+    }
+
+    override fun getItemCount(): Int = pages.size
+
+    // Zoom güncelleme metodu
+    fun updateScale(newScalePercent: Int) {
+        scaleFactor = newScalePercent / 100.0f
+        notifyDataSetChanged() // Tüm sayfaları yeni ölçekle yeniden çiz
+    }
+
+    private fun renderPage(page: PdfRenderer.Page, imageView: ImageView, scale: Float) {
+        // Sayfa boyutlarını al
+        val width = page.width
+        val height = page.height
+
+        // Ölçeklendirilmiş boyutları hesapla
+        val scaledWidth = (width * scale).toInt()
+        val scaledHeight = (height * scale).toInt()
+
+        // Eski bitmap'i temizle (Bellek yönetimi)
+        val oldDrawable = imageView.drawable
+        if (oldDrawable is android.graphics.drawable.BitmapDrawable) {
+            oldDrawable.bitmap?.recycle()
         }
-        return PdfPageViewHolder(imageView)
+
+        // Yeni Bitmap oluştur
+        val bitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888)
+        
+        // Render işlemini Matrix ile yap
+        // PdfRenderer.render(bitmap, bounds, matrix)
+        // bounds: Bitmap'in hangi kısmının doldurulacağı (genelde tamamı)
+        // matrix: Dönüşüm matrisi (scale, translate, rotate)
+        
+        val matrix = Matrix()
+        matrix.setScale(scale, scale)
+
+        page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+
+        imageView.setImageBitmap(bitmap)
+        imageView.visibility = View.VISIBLE
     }
-
-    override fun onBindViewHolder(holder: PdfPageViewHolder, position: Int) {
-        val page = pdfRenderer.openPage(position)
-        
-        // Sayfa boyutlarını ölçeklendir
-        val originalWidth = page.width
-        val originalHeight = page.height
-        
-        val scaledWidth = (originalWidth * scaleFactor).toInt()
-        val scaledHeight = (originalHeight * scaleFactor).toInt()
-
-        // Bitmap oluştur
-        val bitmap = android.graphics.Bitmap.createBitmap(scaledWidth, scaledHeight, android.graphics.Bitmap.Config.ARGB_8888)
-        
-        // Sayfayı bitmap'e render et
-        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-        
-        holder.imageView.setImageBitmap(bitmap)
-        
-        // Sayfayı kapat (Bellek sızıntısını önlemek için kritik)
-        page.close()
-    }
-
-    override fun getItemCount(): Int = pdfRenderer.pageCount
-
-    class PdfPageViewHolder(val imageView: android.widget.ImageView) : RecyclerView.ViewHolder(imageView)
 }
