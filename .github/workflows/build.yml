@@ -4,13 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       version_name:
-        description: 'Versiyon Adı (örn: 1.0.0)'
+        description: "Versiyon Adı (örn: 1.0.0)"
         required: true
-        default: '1.0.0'
+        default: "1.0.0"
+
       version_code:
-        description: 'Versiyon Kodu (örn: 1)'
+        description: "Versiyon Kodu (örn: 1)"
         required: true
-        default: '1'
+        default: "1"
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -23,8 +27,8 @@ jobs:
       - name: JDK 17 Kurulumu
         uses: actions/setup-java@v5
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: "17"
+          distribution: "temurin"
 
       - name: Gradle Önbelleği Yapılandırması
         uses: gradle/actions/setup-gradle@v5
@@ -33,12 +37,12 @@ jobs:
           gradle-home-cache-cleanup: true
 
       - name: Gradlew'yi Çalıştırılabilir Yap
-        run: chmod +x ./gradlew
         working-directory: ./eBook
+        run: chmod +x gradlew
 
       - name: Release APK Oluştur
-        run: ./gradlew assembleRelease
         working-directory: ./eBook
+        run: ./gradlew assembleRelease
         env:
           ORG_GRADLE_PROJECT_versionName: ${{ github.event.inputs.version_name }}
           ORG_GRADLE_PROJECT_versionCode: ${{ github.event.inputs.version_code }}
@@ -48,17 +52,14 @@ jobs:
         run: |
           apk_path=$(find ./eBook/app/build/outputs/apk/release -name "*.apk" | head -n 1)
           echo "apk_path=$apk_path" >> $GITHUB_OUTPUT
-          echo "Bulunan APK: $apk_path"
 
       - name: GitHub Release Oluştur ve APK Yükle
-        uses: softprops/action-gh-release@v2
         if: ${{ steps.find_apk.outputs.apk_path != '' }}
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.event.inputs.version_name }}
           name: eBook App v${{ github.event.inputs.version_name }}
           files: ${{ steps.find_apk.outputs.apk_path }}
           generate_release_notes: true
-          draft: false
-          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
