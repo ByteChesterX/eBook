@@ -1,52 +1,52 @@
 ```
-# Build artifacts
-build/
-.gradle/
+# CI/CD
+.github/
 
-# Compressed archives
-*.tar.gz
-
-# IDE files
-.vscode/
-.idea/
-
-# Environment files
+# Environment
 .env
 .env.local
-*.env.*
+.env.*
 
 # Logs
 *.log
 
-# Temporary files
-*.tmp
-*.swp
-
-# Python cache (if any Python files exist in the project)
+# Dependencies
+node_modules/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
-# Coverage reports
-coverage/
-htmlcov/
-.coverage
-
-# MyPy cache
-.mypy_cache/
-
-# PyTest cache
-.pytest_cache/
-
-# Node modules (if any JS/TS files exist in the project)
-node_modules/
-
-# Virtual environments
+.Python
+env/
 venv/
+ENV/
 .venv/
+env.bak/
+venv.bak/
 
-# Additional build/cache directories
+# Build artifacts
+build/
 dist/
-target/
+*.egg
+*.egg-info/
+.tox/
+.coverage
+htmlcov/
+.coverage.*
+.nyc_output/
+istanbul/
+.mypy_cache/
+.pytest_cache/
+.hypothesis/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
 ```
