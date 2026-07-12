@@ -1,7 +1,7 @@
 # 📚 eBook Reader - Modern Android PDF Okuyucu
 
 eBook Reader, Android cihazlarınızda PDF ve e-kitapları okumak için tasarlanmış, tamamen Kotlin ile geliştirilmiş, hafif ve son derece hızlı bir açık kaynaklı uygulamadır. Harici kütüphanelere bağımlı kalmadan, Android'in kendi PdfRenderer API'sini kullanarak maksimum performans ve düşük bellek tüketimi sağlar.
----
+-
 ✨ Özellikler
 📖 İleri Düzey Okuma Deneyimi
 📜 Tam Ekran Yatay Kaydırma: Sayfalar yan yana dizilir, Instagram hikayeleri veya kitap gibi sağa/sola kaydırarak akıcı bir şekilde okuyun.
@@ -25,7 +25,7 @@ eBook Reader, Android cihazlarınızda PDF ve e-kitapları okumak için tasarlan
 📊 Okuma İstatistikleri: ⏱️ Toplam okuma süresi ve anlık ilerleme yüzdesi.
 🔦 Ekranı Açık Tutma: Okurken ekranın kapanmasını engelleme seçeneği.
 ❤️ Favoriler & Geçmiş: Sık okuduğunuzu dosyalara hızlı erişim ve son açılanlar listesi.
----
+
 # 🚀 Kurulum ve Kullanım
 İmzalı apk dosyasını
 https://github.com/ByteChesterX/eBook/releases/tag/v4.6.1
