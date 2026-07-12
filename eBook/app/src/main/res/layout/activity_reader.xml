@@ -1,57 +1,138 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/coordinatorLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?android:attr/colorBackground">
+    android:fitsSystemWindows="false">
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recyclerViewPages"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:clipToPadding="false"
-        android:padding="8dp"
-        app:layout_constraintBottom_toTopOf="@id/zoomControlContainer"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+    <!-- Ana PDF Görüntüleme Alanı (Tam Ekran) -->
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/viewPagerPages"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="?android:attr/colorBackground" />
 
-    <LinearLayout
-        android:id="@+id/zoomControlContainer"
-        android:layout_width="0dp"
+    <!-- Alt Kontrol Paneli (Zoom, Sayfa No, Menü) -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/bottomControls"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?android:attr/colorBackground"
-        android:elevation="8dp"
-        android:orientation="horizontal"
-        android:padding="16dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent">
+        android:layout_gravity="bottom"
+        android:layout_margin="16dp"
+        app:cardCornerRadius="24dp"
+        app:cardElevation="8dp"
+        app:cardBackgroundColor="#E0FFFFFF"
+        app:strokeWidth="0dp">
 
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Zoom: "
-            android:textSize="14sp"
-            android:textStyle="bold" />
+            android:orientation="vertical"
+            android:padding="12dp">
 
-        <TextView
-            android:id="@+id/zoomValueText"
-            android:layout_width="wrap_content"
+            <!-- Üst Satır: Sayfa Bilgisi ve Menü -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvPageInfo"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Sayfa 1 / 10"
+                    android:textStyle="bold"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="14sp"/>
+
+                <ImageButton
+                    android:id="@+id/btnBookmark"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@android:drawable/btn_star_big_off"
+                    android:contentDescription="Yer İmi" />
+
+                <ImageButton
+                    android:id="@+id/btnMenu"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@android:drawable/ic_menu_more"
+                    android:contentDescription="Menü" />
+            </LinearLayout>
+
+            <!-- Alt Satır: Zoom SeekBar -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:layout_marginTop="8dp">
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@android:drawable/ic_menu_zoom"
+                    android:contentDescription="Zoom Out"
+                    app:tint="?android:attr/textColorSecondary"/>
+
+                <SeekBar
+                    android:id="@+id/zoomSeekBar"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:max="300"
+                    android:progress="100"
+                    android:layout_marginHorizontal="8dp"/>
+
+                <TextView
+                    android:id="@+id/tvZoomPercent"
+                    android:layout_width="40dp"
+                    android:layout_height="wrap_content"
+                    android:text="100%"
+                    android:textAlignment="center"
+                    android:textSize="12sp"/>
+            </LinearLayout>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Arama Çubuğu (Gizli Başlar) -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/searchContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:visibility="gone"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="4dp">
+        
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="100%"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:layout_marginEnd="16dp"/>
+            android:orientation="horizontal"
+            android:padding="8dp">
+            
+            <EditText
+                android:id="@+id/etSearchQuery"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="Metin ara..."
+                android:inputType="text"
+                android:imeOptions="actionSearch"/>
+                
+            <ImageButton
+                android:id="@+id/btnSearchClose"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"/>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
 
-        <SeekBar
-            android:id="@+id/zoomSeekBar"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:max="300"
-            android:min="25"
-            android:progress="100" />
-    </LinearLayout>
-
-</androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
