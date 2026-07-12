@@ -8,8 +8,6 @@ import android.graphics.pdf.PdfRenderer
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import android.view.LayoutInflater
-import android.view.Menu
-import android.view.MenuItem
 import android.view.View
 import android.view.WindowManager
 import android.widget.EditText
@@ -26,7 +24,6 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.card.MaterialCardView
-import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import android.util.LruCache
@@ -57,7 +54,7 @@ class ReaderActivity : AppCompatActivity() {
     private var bitmapCache: LruCache<Int, Bitmap>? = null
     private val executor: ExecutorService = Executors.newFixedThreadPool(2)
     
-    // Veritabanı (Basit SharedPreferences ile simüle edilmiştir, Room entegre edilebilir)
+    // Veritabanı
     private lateinit var prefs: SharedPreferences
 
     companion object {
@@ -71,6 +68,7 @@ class ReaderActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         
         // Edge-to-Edge ve Tam Ekran
+        @Suppress("DEPRECATION")
         window.decorView.systemUiVisibility = (
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
             or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
@@ -86,7 +84,9 @@ class ReaderActivity : AppCompatActivity() {
         setContentView(R.layout.activity_reader)
 
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        loadSettings()
+        
+        // HATA DÜZELTMESİ: İlk açılışta temayı recreate() yapmadan yükle
+        loadSettingsWithoutRecreate()
 
         initViews()
         setupViewPager()
@@ -114,7 +114,6 @@ class ReaderActivity : AppCompatActivity() {
     }
 
     private fun setupViewPager() {
-        // Yatay Kaydırma
         viewPager.orientation = ViewPager2.ORIENTATION_HORIZONTAL
         
         viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
@@ -125,19 +124,10 @@ class ReaderActivity : AppCompatActivity() {
                 saveLastReadPage(position)
                 checkBookmarkStatus(position)
             }
-            
-            override fun onPageScrollStateChanged(state: Int) {
-                super.onPageScrollStateChanged(state)
-                if (state == ViewPager2.SCROLL_STATE_IDLE) {
-                    // Sayfa durduğunda görünmeyen sayfaların bitmaplerini temizle (Opsiyonel optimizasyon)
-                    // LRU cache zaten bunu otomatik yönetir ama ekstra temizlik yapılabilir.
-                }
-            }
         })
     }
 
     private fun setupControls() {
-        // Zoom SeekBar
         zoomSeekBar.progress = (scaleFactor * 100).toInt()
         tvZoomPercent.text = "${(scaleFactor * 100).toInt()}%"
         
@@ -145,12 +135,10 @@ class ReaderActivity : AppCompatActivity() {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
                     val newScale = progress.toFloat() / 100f
-                    // Sınırlar: 0.25x ile 3.0x arası
                     val clampedScale = newScale.coerceIn(0.25f, 3.0f)
                     scaleFactor = clampedScale
                     tvZoomPercent.text = "${(clampedScale * 100).toInt()}%"
                     
-                    // Adapter'a haber ver ve yeniden çiz
                     (viewPager.adapter as? PdfAdapter)?.updateScale(scaleFactor)
                 }
             }
@@ -158,34 +146,27 @@ class ReaderActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
-        // Menü Butonu
         btnMenu.setOnClickListener { showOptionsMenu() }
-        
-        // Yer İmi Butonu
         btnBookmark.setOnClickListener { toggleBookmark() }
         
-        // Arama (Basit Metin Arama - PDF Renderer sınırlı destekler, sadece metin tabanlıysa)
-        // Not: Android PdfRenderer doğrudan metin arama API'si sunmaz, bu görsel bir simülasyondur 
-        // veya OCR gerektirir. Burada UI akışını gösteriyoruz.
         findViewById<ImageButton>(R.id.btnSearchClose).setOnClickListener {
             searchContainer.visibility = View.GONE
         }
-        
-        // Çift Dokunma ile Zoom (Basit Toggle)
-        // Gerçek pinch-to-zoom için ImageView içinde Matrix manipülasyonu gerekir,
-        // adapter içinde halledilecek.
     }
 
     private fun openPdf(uri: android.net.Uri) {
         try {
-            // Dosya yolunu al (ContentResolver ile)
             val fileDescriptor = contentResolver.openFileDescriptor(uri, "r")
+            if (fileDescriptor == null) {
+                showToast("Dosya yüklenemedi.")
+                finish()
+                return
+            }
             parcelFileDescriptor = fileDescriptor
             
-            pdfRenderer = PdfRenderer(fileDescriptor!!)
+            pdfRenderer = PdfRenderer(fileDescriptor)
             totalPages = pdfRenderer!!.pageCount
             
-            // Cache Boyutu Hesapla (Ekran boyutuna göre)
             val maxMemory = (Runtime.getRuntime().maxMemory() / 1024).toInt()
             val availableMemory = maxMemory / 8
             bitmapCache = object : LruCache<Int, Bitmap>(availableMemory) {
@@ -197,7 +178,6 @@ class ReaderActivity : AppCompatActivity() {
             val adapter = PdfAdapter(totalPages, pdfRenderer!!, bitmapCache!!, scaleFactor)
             viewPager.adapter = adapter
             
-            // Son okunan sayfaya git
             val lastPage = getLastReadPage(uri.toString())
             viewPager.setCurrentItem(lastPage, false)
             
@@ -220,9 +200,9 @@ class ReaderActivity : AppCompatActivity() {
             .setTitle("Ayarlar")
             .setItems(items) { _, which ->
                 when (which) {
-                    0 -> setTheme(THEME_LIGHT)
-                    1 -> setTheme(THEME_DARK)
-                    2 -> setTheme(THEME_SEPIA)
+                    0 -> changeThemeAndRecreate(THEME_LIGHT)
+                    1 -> changeThemeAndRecreate(THEME_DARK)
+                    2 -> changeThemeAndRecreate(THEME_SEPIA)
                     3 -> showToast("İçindekiler özelliği yakında eklenecek (Outline API)")
                     4 -> {
                         searchContainer.visibility = View.VISIBLE
@@ -235,7 +215,22 @@ class ReaderActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun setTheme(theme: Int) {
+    // HATA DÜZELTMESİ: Bu metot sadece kullanıcı menüden tıkladığında çalışır
+    private fun changeThemeAndRecreate(theme: Int) {
+        if (currentTheme != theme) {
+            applyThemeSystem(theme)
+            recreate() 
+        }
+    }
+
+    // HATA DÜZELTMESİ: İlk açılışta tetiklenen ve recreate yapmayan fonksiyon
+    private fun loadSettingsWithoutRecreate() {
+        currentTheme = prefs.getInt("theme", THEME_LIGHT)
+        applyThemeSystem(currentTheme)
+    }
+
+    // Tema mantığının tekilleştirilmiş hali
+    private fun applyThemeSystem(theme: Int) {
         currentTheme = theme
         prefs.edit().putInt("theme", theme).apply()
         
@@ -252,37 +247,40 @@ class ReaderActivity : AppCompatActivity() {
                 window.navigationBarColor = ContextCompat.getColor(this, android.R.color.black)
             }
             THEME_SEPIA -> {
-                // Sepya için özel renkler
                 AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
-                window.statusBarColor = ContextCompat.getColor(this, R.color.sepia_bg)
-                window.navigationBarColor = ContextCompat.getColor(this, R.color.sepia_bg)
+                // R.color.sepia_bg projenizde tanımlı olmalıdır.
+                try {
+                    window.statusBarColor = ContextCompat.getColor(this, R.color.sepia_bg)
+                    window.navigationBarColor = ContextCompat.getColor(this, R.color.sepia_bg)
+                } catch (e: Exception) {
+                    // Eğer color tanımı yoksa çökmesin diye fallback
+                    window.statusBarColor = ContextCompat.getColor(this, android.R.color.holo_orange_light)
+                }
             }
         }
-        recreate() // Temayı uygulamak için activity'yi yenile
     }
     
     private fun toggleScreenOn() {
         isScreenOn = !isScreenOn
         if (isScreenOn) {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            Toast.makeText(this, "Ekran açık kalacak", Toast.LENGTH_SHORT).show()
+            showToast("Ekran açık kalacak")
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            Toast.makeText(this, "Ekran kapanma süresi aktif", Toast.LENGTH_SHORT).show()
+            showToast("Ekran kapanma süresi aktif")
         }
     }
 
-    // Yer İmi İşlemleri (SharedPreferences ile basit tutuldu)
     private fun toggleBookmark() {
         val bookmarks = prefs.getStringSet("bookmarks_${intent.data}", mutableSetOf())!!.toMutableSet()
         if (bookmarks.contains(currentPageIndex.toString())) {
             bookmarks.remove(currentPageIndex.toString())
             btnBookmark.setImageResource(android.R.drawable.btn_star_big_off)
-            Toast.makeText(this, "Yer imi kaldırıldı", Toast.LENGTH_SHORT).show()
+            showToast("Yer imi kaldırıldı")
         } else {
             bookmarks.add(currentPageIndex.toString())
             btnBookmark.setImageResource(android.R.drawable.btn_star_big_on)
-            Toast.makeText(this, "Yer imi eklendi", Toast.LENGTH_SHORT).show()
+            showToast("Yer imi eklendi")
         }
         prefs.edit().putStringSet("bookmarks_${intent.data}", bookmarks).apply()
     }
@@ -303,10 +301,10 @@ class ReaderActivity : AppCompatActivity() {
     private fun getLastReadPage(uri: String): Int {
         return prefs.getInt("last_page_$uri", 0)
     }
-    
-    private fun loadSettings() {
-        currentTheme = prefs.getInt("theme", THEME_LIGHT)
-        setTheme(currentTheme) // Temayı yükle
+
+    // HATA DÜZELTMESİ: Eksik showToast fonksiyonu eklendi
+    private fun showToast(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
     override fun onDestroy() {
@@ -326,7 +324,7 @@ class ReaderActivity : AppCompatActivity() {
 
         fun updateScale(newScale: Float) {
             scale = newScale
-            notifyDataSetChanged() // Tüm sayfaları yeni skala ile yeniden çizer
+            notifyDataSetChanged() 
         }
 
         override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): PageViewHolder {
@@ -346,9 +344,8 @@ class ReaderActivity : AppCompatActivity() {
 
             fun bind(pageIndex: Int) {
                 progress.visibility = View.VISIBLE
-                imageView.setImageBitmap(null) // Eski bitmap'i temizle
+                imageView.setImageBitmap(null) 
 
-                // Cache'den kontrol et
                 val cachedBitmap = cache.get(pageIndex)
                 if (cachedBitmap != null) {
                     imageView.setImageBitmap(cachedBitmap)
@@ -357,27 +354,23 @@ class ReaderActivity : AppCompatActivity() {
                     return
                 }
 
-                // Asenkron Render
                 executor.execute {
                     try {
                         val page = renderer.openPage(pageIndex)
                         
-                        // Ölçeklendirilmiş boyutları hesapla
                         val scaledWidth = (page.width * scale).toInt()
                         val scaledHeight = (page.height * scale).toInt()
                         
                         val bitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888)
                         
-                        // Render
                         page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                         page.close()
                         
-                        // Cache'e ekle
                         cache.put(pageIndex, bitmap)
                         
-                        // UI Thread'e dön
                         imageView.post {
-                            if (adapterPosition == pageIndex) { // Pozisyon değişmediyse
+                            // HATA DÜZELTMESİ: adapterPosition yerine bindingAdapterPosition kullanıldı
+                            if (bindingAdapterPosition == pageIndex) { 
                                 imageView.setImageBitmap(bitmap)
                                 applyMatrix(imageView, scaledWidth, scaledHeight)
                                 progress.visibility = View.GONE
@@ -391,21 +384,13 @@ class ReaderActivity : AppCompatActivity() {
             }
             
             private fun applyMatrix(imgView: ImageView, bmpW: Int, bmpH: Int) {
-                // Center Crop veya Fit Center mantığı
-                // Tam ekran olması için ScaleType matrix ile manuel hesaplama
                 val matrix = Matrix()
                 val viewW = imgView.width.toFloat()
                 val viewH = imgView.height.toFloat()
                 
                 if (viewW > 0 && viewH > 0) {
-                    val scaleX = viewW / bmpW
-                    val scaleY = viewH / bmpH
-                    
-                    // Kullanıcının seçtiği zoom (scale) ile birleştir
-                    // Burada basitçe ortala ve zoom'u uygula
                     matrix.setScale(scale, scale)
                     
-                    // Merkeze ötele
                     val translateX = (viewW - bmpW * scale) / 2
                     val translateY = (viewH - bmpH * scale) / 2
                     matrix.postTranslate(translateX, translateY)
