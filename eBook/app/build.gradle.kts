@@ -17,9 +17,26 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // 🔴 GÜNCELLENEN BÖLÜM: GitHub Secrets İsimleriyle Tam Eşleşen İmza Ayarları
+    signingConfigs {
+        create("release") {
+            // CI/CD sürecinde decode edilip app klasörüne yazılacak imza dosyası
+            storeFile = file("release-keystore.jks")
+            
+            // GitHub Secrets'taki isimlerle birebir eşlendi
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS")
+            keyPassword = System.getenv("KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            
+            // 🔴 GÜNCELLENEN SATIR: Release derlemesi yukarıdaki imza ayarını kullanacak
+            signingConfig = signingConfigs.getByName("release")
+            
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -53,8 +70,6 @@ dependencies {
     // Veritabanı (Yer imleri ve favoriler için)
     implementation("androidx.room:room-runtime:2.6.1")
     annotationProcessor("androidx.room:room-compiler:2.6.1")
-    // Kotlin için KSP kullanıyorsanız:
-    // ksp("androidx.room:room-compiler:2.6.1")
     
     implementation("androidx.preference:preference-ktx:1.2.1")
 }
